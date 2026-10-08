@@ -8,27 +8,29 @@ class ErroSintatico(Exception):
 
 
 class Parser:
-    def __init__(self, src):
-        self.toks = tokenizar(src)
+    def __init__(self, texto):
+        self.tokens = tokenizar(texto)
         self.pos = 0
-        self.buf = []
+        self.traducao = []
         self.saida = []
 
-    @property
     def atual(self):
-        return self.toks[self.pos]
+        return self.tokens[self.pos]
 
     def casar(self, tipo):
-        t = self.atual
-        if t.tipo != tipo:
+        token = self.atual()
+        if token.tipo != tipo:
             self.erro(f"esperado '{tipo}'")
         self.pos += 1
-        return t
+        return token
 
-    def erro(self, msg):
-        t = self.atual
-        enc = "fim do arquivo" if t.tipo == "EOF" else f"'{t.lexema}'"
-        raise ErroSintatico(f"Linha {t.linha}: {msg}, encontrado {enc}")
+    def erro(self, mensagem):
+        token = self.atual()
+        if token.tipo == "EOF":
+            encontrado = "fim do arquivo"
+        else:
+            encontrado = f"'{token.lexema}'"
+        raise ErroSintatico(f"Linha {token.linha}: {mensagem}, encontrado {encontrado}")
 
     def program(self):
         self.casar("Matexpr")
@@ -38,10 +40,13 @@ class Parser:
 
     def block(self):
         self.casar("{")
-        while self.atual.tipo == "type":
-            self.decl()
+        self.decls()
         self.stmts()
         self.casar("}")
+
+    def decls(self):
+        while self.atual().tipo == "type":
+            self.decl()
 
     def decl(self):
         self.casar("type")
@@ -49,41 +54,39 @@ class Parser:
         self.casar(";")
 
     def stmts(self):
-        while self.atual.tipo == "{" or self.atual.tipo in PRIMEIRO_EXPR:
+        while self.atual().tipo == "{" or self.atual().tipo in PRIMEIRO_EXPR:
             self.stmt()
 
     def stmt(self):
-        if self.atual.tipo == "{":
+        if self.atual().tipo == "{":
             self.block()
-        elif self.atual.tipo in PRIMEIRO_EXPR:
+        else:
             self.expr()
             self.casar(";")
-            self.saida.append(" ".join(self.buf))
-            self.buf = []
-        else:
-            self.erro("esperado comando ou '}'")
+            self.saida.append(" ".join(self.traducao))
+            self.traducao = []
 
     def expr(self):
         self.term()
-        while self.atual.tipo in ("+", "-"):
-            op = self.casar(self.atual.tipo).lexema
+        while self.atual().tipo in ("+", "-"):
+            operador = self.casar(self.atual().tipo).lexema
             self.term()
-            self.buf.append(op)
+            self.traducao.append(operador)
 
     def term(self):
         self.fact()
-        while self.atual.tipo in ("*", "/"):
-            op = self.casar(self.atual.tipo).lexema
+        while self.atual().tipo in ("*", "/"):
+            operador = self.casar(self.atual().tipo).lexema
             self.fact()
-            self.buf.append(op)
+            self.traducao.append(operador)
 
     def fact(self):
-        t = self.atual
-        if t.tipo == "(":
+        token = self.atual()
+        if token.tipo == "(":
             self.casar("(")
             self.expr()
             self.casar(")")
-        elif t.tipo in ("num", "id"):
-            self.buf.append(self.casar(t.tipo).lexema)
+        elif token.tipo in ("num", "id"):
+            self.traducao.append(self.casar(token.tipo).lexema)
         else:
             self.erro("esperado expressão (número, id ou '(')")
